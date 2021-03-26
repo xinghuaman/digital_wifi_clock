@@ -1,0 +1,13 @@
+# global clk
+NET "aclk"           LOC=P58  | IOSTANDARD = LVCMOS33 | BUFG=CLK | PERIOD=33.33; #30 MHz
+# tm1637 interface                   
+NET "tm1637_clk"     LOC=P3   | IOSTANDARD = LVCMOS33; 
+NET "tm1637_do"      LOC=P4   | IOSTANDARD = LVCMOS33; 
+# uart esp-01
+NET "esp_01_uart_rx" LOC=P30  | IOSTANDARD = LVCMOS33;    
+NET "esp_01_uart_tx" LOC=P31  | IOSTANDARD = LVCMOS33;    
+# status led
+NET "led"            LOC=P138 | IOSTANDARD = LVCMOS33;  
+
+
+
