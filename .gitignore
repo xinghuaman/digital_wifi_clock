@@ -4,3 +4,7 @@ xc3s50an/ise/*
 xc3s50an/questasim/work/*
 xc3s50an/questasim/transcript
 *wlf
+xc3s50an/xcore/uart_fifo/*
+!xc3s50an/xcore/uart_fifo/uart_fifo.xco
+!xc3s50an/xcore/uart_fifo/uart_fifo.vhd
+

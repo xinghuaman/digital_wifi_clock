@@ -8,6 +8,9 @@ NET "esp_01_uart_rx" LOC=P30  | IOSTANDARD = LVCMOS33;
 NET "esp_01_uart_tx" LOC=P31  | IOSTANDARD = LVCMOS33;    
 # status led
 NET "led"            LOC=P138 | IOSTANDARD = LVCMOS33;  
+# i2c ds1307
+NET "esp_01_uart_rx" LOC=P134 | IOSTANDARD = LVCMOS33;    
+NET "esp_01_uart_tx" LOC=P135 | IOSTANDARD = LVCMOS33;
 
 
 
