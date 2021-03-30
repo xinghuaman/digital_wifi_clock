@@ -17,12 +17,15 @@ module pwm
     input  [9:0] level_pwm,
     output out_pwm
 );
-
+    
+    reg reset_reg = 1'b0;
     reg [9:0] counter = 10'h000;
     reg value = 1'b0; 
     
     always@(posedge clk) begin
-        if (reset) 
+        reset_reg <= reset;
+
+        if (reset_reg) 
             counter <= 10'h000;
         else begin
             counter <= counter + 1'b1;

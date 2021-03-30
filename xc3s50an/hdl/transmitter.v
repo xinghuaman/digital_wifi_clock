@@ -7,8 +7,8 @@ module transmitter
     input  valid,
     input  [7:0] data,
     output ready,
-    output clk_out,
-    output data_out
+    output data_out,
+    output clk_out
 );
     
     reg clk_in_z = 1'b1;

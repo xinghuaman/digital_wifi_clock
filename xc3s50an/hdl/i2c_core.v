@@ -45,6 +45,9 @@ module i2c_core
 
     reg  [3:0] counter_bit = 4'h0;
     reg  [7:0] counter_byte = 8'h00;
+    reg  [7:0] buffer_data = 8'h00;
+    reg  out_valid_reg = 1'b0;
+    reg  [7:0] out_data_reg = 8'h00;
     
     parameter [4:0] S_RESET             = 1, 
                     S_IDLE              = 0,
@@ -62,7 +65,20 @@ module i2c_core
                     S_SEND_STOP         = 13,
                     S_READ              = 14,
                     S_READ_ACK          = 15,
-                    S_READ_NACK         = 16;
+                    S_READ_NACK         = 16,
+                    S_WAIT_DATA1        = 17,
+                    S_SEND_DATA_BIT7    = 18,
+                    S_SEND_DATA_BIT6    = 19,
+                    S_SEND_DATA_BIT5    = 20,
+                    S_SEND_DATA_BIT4    = 21,
+                    S_SEND_DATA_BIT3    = 22,
+                    S_SEND_DATA_BIT2    = 23,
+                    S_SEND_DATA_BIT1    = 24,
+                    S_SEND_DATA_BIT0    = 25,
+                    S_SEND_DATA_ACK_OK  = 26,
+                    S_WAIT_DATA2        = 27,
+                    S_SEND_DATA_ACK_NOK = 28,
+                    S_WAIT_DATA3        = 29;
 
     reg [4:0] state = 5'b0;
     
@@ -114,7 +130,7 @@ module i2c_core
                     if (clk_i2c_x2_pulse)
                         t_buffer_en <= 1'b1;
 
-                    if (rd_address)
+                    if (rd_address || wr_address)
                         state <= S_WAIT_PULSE;
                 end 
                 S_WAIT_PULSE: begin
@@ -183,7 +199,12 @@ module i2c_core
 
                     if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)begin
                         //if (t_buffer_out == 1'b0)
-                            state <= S_READ;
+                            if (rw_status)
+                                state <= S_READ;
+                            else begin 
+                                state <= S_SEND_DATA_BIT7;
+                                ready <= 1'b1;
+                            end
                         //else 
                             //state <= S_SEND_STOP;
                     end
@@ -226,6 +247,83 @@ module i2c_core
                     if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
                         state <= S_SEND_STOP;
                 end
+                S_SEND_DATA_BIT7: begin
+                    ready <= 1'b0;
+                    t_buffer_en <= 1'b0;
+                    t_buffer_in <= data[7];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_SEND_DATA_BIT6;
+                end
+                S_SEND_DATA_BIT6: begin
+                    t_buffer_in <= data[6];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_SEND_DATA_BIT5;
+                end
+                S_SEND_DATA_BIT5: begin
+                    t_buffer_in <= data[5];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_SEND_DATA_BIT4;
+                end
+                S_SEND_DATA_BIT4: begin
+                    t_buffer_in <= data[4];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_SEND_DATA_BIT3;
+                end
+                S_SEND_DATA_BIT3: begin
+                    t_buffer_in <= data[3];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_SEND_DATA_BIT2;
+                end
+                S_SEND_DATA_BIT2: begin
+                    t_buffer_in <= data[2];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_SEND_DATA_BIT1;
+                end
+                S_SEND_DATA_BIT1: begin
+                    t_buffer_in <= data[1];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_SEND_DATA_BIT0;
+                end
+                S_SEND_DATA_BIT0: begin
+                    t_buffer_in <= data[0];
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)
+                        state <= S_WAIT_DATA1;
+                end
+                S_WAIT_DATA1: begin
+                    ready <= 1'b1;
+                    state <= S_WAIT_DATA2;
+                end
+                S_WAIT_DATA2: begin
+                    state <= S_WAIT_DATA3;
+                end
+                S_WAIT_DATA3: begin
+                    if (in_valid)
+                        state <= S_SEND_DATA_ACK_OK;
+                    else
+                        state <= S_SEND_DATA_ACK_NOK;
+                end
+                S_SEND_DATA_ACK_OK: begin
+                    t_buffer_en <= 1'b1;
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)begin
+                        state <= S_SEND_DATA_BIT7;
+                    end
+                end
+                S_SEND_DATA_ACK_NOK: begin
+                    t_buffer_en <= 1'b1;
+
+                    if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)begin
+                        state <= S_SEND_STOP;
+                    end
+                end
             endcase
         end
     end
@@ -247,6 +345,33 @@ module i2c_core
     );
     
     always@(posedge clk_sys) begin
+        if (state == S_READ && clk_i2c_pulse == 1'b1) begin
+            buffer_data[0] <= t_buffer_out;
+            buffer_data[1] <= buffer_data[0];
+            buffer_data[2] <= buffer_data[1];
+            buffer_data[3] <= buffer_data[2];
+            buffer_data[4] <= buffer_data[3];
+            buffer_data[5] <= buffer_data[4];
+            buffer_data[6] <= buffer_data[5];
+            buffer_data[7] <= buffer_data[6];
+        end else if (state == S_IDLE) begin
+            buffer_data <= 8'h00;
+        end
+    end
+
+    always@(posedge clk_sys) begin
+        if (state == S_READ_ACK || state == S_READ_NACK) begin
+            if (clk_i2c_pulse) begin
+                out_valid_reg <= 1'b1;
+                out_data_reg <= buffer_data;
+            end else begin
+                out_valid_reg <= 1'b0;
+                out_data_reg <= 8'h00;
+            end
+        end
+    end
+
+    always@(posedge clk_sys) begin
         if (reset) begin
             scl_reg <= 1'b1;
         end else if (state != S_IDLE && state != S_WAIT_PULSE) begin
@@ -266,12 +391,14 @@ module i2c_core
     ) 
     IOBUF_SCL_INST 
     (
-        .O(buffer_out),   // Buffer output
+        .O(),   // Buffer output
         .IO(scl),         // Buffer inout port (connect directly to top-level port)
         .I(scl_reg),      // Buffer input
-        .T(1'b1)          // 3-state enable input, high=input, low=output
+        .T(1'b0)          // 3-state enable input, high=input, low=output
     );
 
     assign in_ready = ready;
+    assign out_valid = out_valid_reg;
+    assign out_data = out_data_reg;
 
 endmodule

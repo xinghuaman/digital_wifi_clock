@@ -31,7 +31,11 @@ module control
     output [7:0] control_i2c_in_data,
     input  control_i2c_in_ready,
     input  control_i2c_out_valid,
-    input  [7:0] control_i2c_out_data
+    input  [7:0] control_i2c_out_data,
+
+    output control_display_valid,
+    output [7:0] control_display_data,
+    input  control_display_ready
 );
     reg ready_reg = 1'b0;
     reg control_valid_z = 1'b0;
@@ -60,9 +64,10 @@ module control
 
     reg control_i2c_wr_addr_reg = 1'b0;
     reg control_i2c_rd_addr_reg = 1'b0;
-    reg [6:0] control_i2c_addr_reg = 7'b0000000;
+    reg [ 6:0] control_i2c_addr_reg = 7'b0000000;
     reg control_i2c_in_valid_reg = 1'b0;
-    reg [7:0] control_i2c_in_data_reg = 8'h00;
+    reg [ 7:0] control_i2c_in_data_reg = 8'h00;
+    reg [16:0] counter = 17'h00000;
 
     parameter [3:0] S_I2C_IDLE    = 0,
                     S_I2C_RESET   = 1,
@@ -72,11 +77,21 @@ module control
                     S_I2C_WR_HR   = 5,
                     S_I2C_SEND_1  = 6,
                     S_I2C_SEND_2  = 7,
-                    S_I2C_RD_ADDR = 8;
+                    S_I2C_SEND_3  = 8,
+                    S_I2C_RD_ADDR = 9;
 
     reg [3:0] state_i2c = 4'd0;
 
-    reg [16:0] counter = 17'h00000;
+    reg [7:0] min_buffer = 8'h00;
+    reg [7:0] hr_buffer = 8'h00;
+    reg [1:0] count_out_data = 2'b00;
+    reg [7:0] number = 8'h00;
+    reg [7:0] digit = 8'h00;
+
+    parameter [3:0] S_DISPLAY_IDLE    = 0,
+                    S_DISPLAY_RESET   = 1;
+
+    reg [3:0] state_display = 4'd0;
 
     always@(posedge clk) begin
         if (reset)
@@ -179,8 +194,15 @@ module control
                     if (control_i2c_in_ready) begin
                         control_i2c_wr_addr_reg <= 1'b1;
                         control_i2c_addr_reg <= CONST_ADDR_DS1307;
-                        state_i2c <= S_I2C_WR_SEC;
+                        state_i2c <= S_I2C_SEND_1;
                     end
+                end
+                S_I2C_SEND_1: begin
+                    control_i2c_in_valid_reg <= 1'b0;
+                    control_i2c_in_data_reg <= 8'h00;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_WR_SEC;
                 end
                 S_I2C_RD_ADDR: begin
                     if (control_i2c_in_ready) begin
@@ -196,10 +218,10 @@ module control
                     if (control_i2c_in_ready) begin
                         control_i2c_in_valid_reg <= 1'b1;
                         control_i2c_in_data_reg <= sec;
-                        state_i2c <= S_I2C_SEND_1;
+                        state_i2c <= S_I2C_SEND_2;
                     end
                 end
-                S_I2C_SEND_1: begin
+                S_I2C_SEND_2: begin
                     control_i2c_in_valid_reg <= 1'b0;
                     control_i2c_in_data_reg <= 8'h00;
 
@@ -210,10 +232,10 @@ module control
                     if (control_i2c_in_ready) begin
                         control_i2c_in_valid_reg <= 1'b1;
                         control_i2c_in_data_reg <= min;
-                        state_i2c <= S_I2C_SEND_2;
+                        state_i2c <= S_I2C_SEND_3;
                     end                    
                 end
-                S_I2C_SEND_2: begin
+                S_I2C_SEND_3: begin
                     control_i2c_in_valid_reg <= 1'b0;
                     control_i2c_in_data_reg <= 8'h00;
 
@@ -232,7 +254,50 @@ module control
     end
 
     always@(posedge clk) begin
+        if (control_i2c_out_valid) begin
+            count_out_data <= count_out_data + 1'b1;
+        end else if (count_out_data == 2'b11) begin
+            count_out_data <= 2'b00;
+        end else if (reset) begin
+            count_out_data <= 2'b00;
+        end
+
+        if (count_out_data == 2'b01) 
+            min_buffer <= control_i2c_out_data;
+        else if (count_out_data == 2'b10)
+            hr_buffer <= control_i2c_out_data;
+    end
+
+    always@(posedge clk) begin
+        if (reset)
+            state_display <= S_DISPLAY_RESET;
+        else begin    
+            case(state_display)
+                S_DISPLAY_RESET: begin
+                    state_display <= S_DISPLAY_IDLE;
+                end
+                S_DISPLAY_IDLE: begin
+
+                end
+            endcase
+        end    
+    end
+
+    always@(posedge clk) begin
         counter <= counter + 1'b1;
+
+        case(number)
+            0: digit <= 8'b00111111;
+            1: digit <= 8'b00000110;
+            2: digit <= 8'b01011011;
+            3: digit <= 8'b01001111;
+            4: digit <= 8'b01100110;
+            5: digit <= 8'b01101101;
+            6: digit <= 8'b01111101;
+            7: digit <= 8'b00000111;
+            8: digit <= 8'b01111111;
+            9: digit <= 8'b01101111;
+        endcase
     end
 
     assign control_i2c_byte_read = CONST_BYTE_READ;

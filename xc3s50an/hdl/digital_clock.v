@@ -47,8 +47,8 @@ module digital_clock
     wire i2c_out_valid;
     wire [7:0] i2c_out_data;
 
-    reg  tm1637_data_valid = 1'b0;
-    reg  [7:0] tm1637_data = 8'h00;
+    wire tm1637_data_valid = 1'b0;
+    wire [7:0] tm1637_data = 8'h00;
     wire tm1637_data_ready;
     
     reg  [9:0] level_pwm = 10'b0;
@@ -140,7 +140,10 @@ module digital_clock
         .control_i2c_in_data(i2c_in_data),
         .control_i2c_in_ready(i2c_in_ready),
         .control_i2c_out_valid(i2c_out_valid),
-        .control_i2c_out_data(i2c_out_data)
+        .control_i2c_out_data(i2c_out_data),
+        .control_display_valid(tm1637_data_valid),
+        .control_display_data(tm1637_data),
+        .control_display_ready(tm1637_data_ready)
     );
 
     i2c_core i2c_core_inst
