@@ -47,8 +47,8 @@ module digital_clock
     wire i2c_out_valid;
     wire [7:0] i2c_out_data;
 
-    wire tm1637_data_valid = 1'b0;
-    wire [7:0] tm1637_data = 8'h00;
+    wire tm1637_data_valid;
+    wire [7:0] tm1637_data;
     wire tm1637_data_ready;
     
     reg  [9:0] level_pwm = 10'b0;

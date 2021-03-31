@@ -82,16 +82,38 @@ module control
 
     reg [3:0] state_i2c = 4'd0;
 
-    reg [7:0] min_buffer = 8'h00;
-    reg [7:0] hr_buffer = 8'h00;
+    reg [7:0] min_buffer = 8'b00111001;
+    reg [7:0] hr_buffer = 8'b00100110;
     reg [1:0] count_out_data = 2'b00;
+    reg [7:0] dec_min = 8'h00;
+    reg [7:0] unit_min = 8'h00;
+    reg [7:0] dec_hr = 8'h00;
+    reg [7:0] unit_hr = 8'h00;
     reg [7:0] number = 8'h00;
     reg [7:0] digit = 8'h00;
 
-    parameter [3:0] S_DISPLAY_IDLE    = 0,
-                    S_DISPLAY_RESET   = 1;
+    reg control_display_valid_reg = 1'b0;
+    reg [7:0] control_display_data_reg = 8'h00;
 
-    reg [3:0] state_display = 4'd0;
+    parameter [4:0] S_DISPLAY_IDLE       = 0,
+                    S_DISPLAY_RESET      = 1,
+                    S_DISPLAY_SEND_ADDR1 = 2,
+                    S_DISPLAY_SEND_DATA1 = 3,
+                    S_DISPLAY_SEND_ADDR2 = 4,
+                    S_DISPLAY_SEND_DATA2 = 5,
+                    S_DISPLAY_SEND_ADDR3 = 6,
+                    S_DISPLAY_SEND_DATA3 = 7,
+                    S_DISPLAY_SEND_ADDR4 = 8,
+                    S_DISPLAY_SEND_DATA4 = 9,
+                    S_DISPLAY_CONVERT1   = 10,
+                    S_DISPLAY_CONVERT2   = 11,
+                    S_DISPLAY_CONVERT3   = 12,
+                    S_DISPLAY_CONVERT4   = 13,
+                    S_DISPLAY_WAIT1      = 14,
+                    S_DISPLAY_WAIT2      = 15,
+                    S_DISPLAY_WAIT3      = 16;
+
+    reg [4:0] state_display = 5'd0;
 
     always@(posedge clk) begin
         if (reset)
@@ -247,7 +269,7 @@ module control
                         control_i2c_in_valid_reg <= 1'b1;
                         control_i2c_in_data_reg <= hr;
                         state_i2c <= S_I2C_IDLE;
-                    end                    
+                    end
                 end
             endcase
         end    
@@ -271,13 +293,114 @@ module control
     always@(posedge clk) begin
         if (reset)
             state_display <= S_DISPLAY_RESET;
-        else begin    
+        else begin
             case(state_display)
                 S_DISPLAY_RESET: begin
                     state_display <= S_DISPLAY_IDLE;
                 end
                 S_DISPLAY_IDLE: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
 
+                    if (control_i2c_out_valid && count_out_data == 2'b10) begin
+                        state_display <= S_DISPLAY_SEND_ADDR1;
+                        control_display_data_reg <= 8'hC0;
+                        control_display_valid_reg <= 1'b1;
+                    end
+                end
+                S_DISPLAY_SEND_ADDR1: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    state_display <= S_DISPLAY_CONVERT1;
+                end
+                S_DISPLAY_CONVERT1: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    number <= dec_hr;
+                    state_display <= S_DISPLAY_SEND_DATA1;
+                end
+                S_DISPLAY_SEND_DATA1: begin
+                    if (control_display_ready) begin
+                        control_display_data_reg <= digit;
+                        control_display_valid_reg <= 1'b1;
+                        state_display <= S_DISPLAY_WAIT1;
+                    end
+                end
+                S_DISPLAY_WAIT1: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    state_display <= S_DISPLAY_SEND_ADDR2;
+                end
+                S_DISPLAY_SEND_ADDR2: begin
+                    if (control_display_ready) begin
+                        control_display_data_reg <= 8'hC1;
+                        control_display_valid_reg <= 1'b1;
+                        state_display <= S_DISPLAY_CONVERT2;
+                    end
+                end
+                S_DISPLAY_CONVERT2: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    number <= unit_hr;
+                    state_display <= S_DISPLAY_SEND_DATA2;
+                end
+                S_DISPLAY_SEND_DATA2: begin
+                    if (control_display_ready) begin
+                        control_display_data_reg[6:0] <= digit[6:0];
+                        control_display_data_reg[7] <= 1'b1;
+                        control_display_valid_reg <= 1'b1;
+                        state_display <= S_DISPLAY_WAIT2;
+                    end
+                end
+                S_DISPLAY_WAIT2: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    state_display <= S_DISPLAY_SEND_ADDR3;
+                end
+                S_DISPLAY_SEND_ADDR3: begin
+                    if (control_display_ready) begin
+                        control_display_data_reg <= 8'hC2;
+                        control_display_valid_reg <= 1'b1;
+                        state_display <= S_DISPLAY_CONVERT3;
+                    end
+                end
+                S_DISPLAY_CONVERT3: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    number <= dec_min;
+                    state_display <= S_DISPLAY_SEND_DATA3;
+                end
+                S_DISPLAY_SEND_DATA3: begin
+                    if (control_display_ready) begin
+                        control_display_data_reg <= digit;
+                        control_display_valid_reg <= 1'b1;
+                        state_display <= S_DISPLAY_WAIT3;
+                    end
+                end
+                S_DISPLAY_WAIT3: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    state_display <= S_DISPLAY_SEND_ADDR4;
+                end
+                S_DISPLAY_SEND_ADDR4: begin
+                    if (control_display_ready) begin
+                        control_display_data_reg <= 8'hC3;
+                        control_display_valid_reg <= 1'b1;
+                        state_display <= S_DISPLAY_CONVERT4;
+                    end
+                end
+                S_DISPLAY_CONVERT4: begin
+                    control_display_data_reg <= 8'h00;
+                    control_display_valid_reg <= 1'b0;
+                    number <= unit_min;
+                    state_display <= S_DISPLAY_SEND_DATA4;
+                end
+                S_DISPLAY_SEND_DATA4: begin
+                    if (control_display_ready) begin
+                        control_display_data_reg <= digit;
+                        control_display_valid_reg <= 1'b1;
+                        state_display <= S_DISPLAY_IDLE;
+                    end
                 end
             endcase
         end    
@@ -285,7 +408,13 @@ module control
 
     always@(posedge clk) begin
         counter <= counter + 1'b1;
+        unit_min[3:0] <= min_buffer[3:0];
+        dec_min[2:0] <= min_buffer[6:4];
+        unit_hr[3:0] <= hr_buffer[3:0];
+        dec_hr[1:0] <= hr_buffer[5:4];
+    end
 
+    always@(posedge clk) begin
         case(number)
             0: digit <= 8'b00111111;
             1: digit <= 8'b00000110;
@@ -309,5 +438,7 @@ module control
     assign control_i2c_addr = control_i2c_addr_reg;
     assign control_i2c_in_valid = control_i2c_in_valid_reg;
     assign control_i2c_in_data = control_i2c_in_data_reg;
+    assign control_display_valid = control_display_valid_reg;
+    assign control_display_data = control_display_data_reg;
 
 endmodule

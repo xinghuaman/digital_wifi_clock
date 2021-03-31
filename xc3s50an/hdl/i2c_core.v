@@ -198,15 +198,15 @@ module i2c_core
                     t_buffer_en <= 1'b1;
 
                     if (clk_i2c == 1'b0 && clk_i2c_x2_pulse == 1'b1)begin
-                        //if (t_buffer_out == 1'b0)
+                        if (t_buffer_out == 1'b0)
                             if (rw_status)
                                 state <= S_READ;
                             else begin 
                                 state <= S_SEND_DATA_BIT7;
                                 ready <= 1'b1;
                             end
-                        //else 
-                            //state <= S_SEND_STOP;
+                        else 
+                            state <= S_SEND_STOP;
                     end
                 end
                 S_SEND_STOP: begin
