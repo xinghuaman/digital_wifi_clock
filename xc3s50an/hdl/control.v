@@ -54,7 +54,7 @@ module control
                     S_UART_DATA_SEC      = 6,
                     S_UART_ANSWER_OK     = 7,
                     S_UART_ANSWER_REPEAT = 8;
-                            
+
     reg [3:0] state_time_update = 4'd0;
 
     parameter [6:0] CONST_ADDR_DS1307 = 7'b1101000;
@@ -68,6 +68,8 @@ module control
     reg control_i2c_in_valid_reg = 1'b0;
     reg [ 7:0] control_i2c_in_data_reg = 8'h00;
     reg [16:0] counter = 17'h00000;
+    reg [ 6:0] blink_delay = 7'h00;
+    reg blink = 1'b0;
 
     parameter [3:0] S_I2C_IDLE    = 0,
                     S_I2C_RESET   = 1,
@@ -147,12 +149,14 @@ module control
                 end
                 S_UART_DATA_HR: begin
                     if (control_valid) begin
-                        hr <= control_data;
+                        //hr <= control_data;
+                        hr_buffer <= control_data;
                         state_time_update <= S_UART_DATA_MIN;
                     end    
                 end
                 S_UART_DATA_MIN: begin
-                    min <= control_data;
+                    //min <= control_data;
+                    min_buffer <= control_data;
                     state_time_update <= S_UART_DATA_SEC;
                 end
                 S_UART_DATA_SEC: begin
@@ -283,11 +287,11 @@ module control
         end else if (reset) begin
             count_out_data <= 2'b00;
         end
-
+/*
         if (count_out_data == 2'b01) 
             min_buffer <= control_i2c_out_data;
         else if (count_out_data == 2'b10)
-            hr_buffer <= control_i2c_out_data;
+            hr_buffer <= control_i2c_out_data;*/
     end
 
     always@(posedge clk) begin
@@ -302,7 +306,8 @@ module control
                     control_display_data_reg <= 8'h00;
                     control_display_valid_reg <= 1'b0;
 
-                    if (control_i2c_out_valid && count_out_data == 2'b10) begin
+                    //if (control_i2c_out_valid && count_out_data == 2'b10) begin
+                    if (counter == 17'h1FFFF) begin
                         state_display <= S_DISPLAY_SEND_ADDR1;
                         control_display_data_reg <= 8'hC0;
                         control_display_valid_reg <= 1'b1;
@@ -347,7 +352,8 @@ module control
                 S_DISPLAY_SEND_DATA2: begin
                     if (control_display_ready) begin
                         control_display_data_reg[6:0] <= digit[6:0];
-                        control_display_data_reg[7] <= 1'b1;
+//                        control_display_data_reg[7] <= 1'b1;
+                        control_display_data_reg[7] <= blink;
                         control_display_valid_reg <= 1'b1;
                         state_display <= S_DISPLAY_WAIT2;
                     end
@@ -404,6 +410,19 @@ module control
                 end
             endcase
         end    
+    end
+
+    always@(posedge clk) begin
+        if (reset) 
+            blink_delay <= 7'h00;    
+        else if (counter == 17'h1FFFF) 
+            blink_delay <= blink_delay + 1'b1;
+        else if (blink_delay == 7'h7F)
+            blink_delay <= 7'h00;
+
+        if (blink_delay == 7'h7F) begin
+            blink <= ~blink;
+        end
     end
 
     always@(posedge clk) begin

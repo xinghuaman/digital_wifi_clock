@@ -21,4 +21,4 @@ vsim -t 1ps -vopt -voptargs=+acc=lprn -lib work -L work work.glbl -L unisims_ver
 
 do wave_test.do 
 view wave
-run 10 ms
+run 150 ms

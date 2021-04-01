@@ -4,13 +4,14 @@ module transmitter
     input  clk_in,
     input  clk_in_x2,
     input  reset,
+    input  packet,
     input  valid,
     input  [7:0] data,
     output ready,
     output data_out,
     output clk_out
 );
-    
+
     reg clk_in_z = 1'b1;
     reg clk_in_front_pulse= 1'b0;
     
@@ -36,7 +37,8 @@ module transmitter
                     S_SEND_BIT6  = 10,
                     S_SEND_BIT7  = 11,
                     S_SEND_ACK   = 12,
-                    S_SEND_STOP  = 13;
+                    S_SEND_STOP  = 13,
+                    S_SEND_BIT0P = 14;
                          
     reg [3:0] state = 4'b0000;
     
@@ -105,6 +107,8 @@ module transmitter
                     end 
                 end
                 S_SEND_BIT0: begin
+                    ready_reg <= 1'b0;
+
                     if (clk_in == 1'b0 && clk_in_x2_front_pulse == 1'b1) begin
                         data_out_reg <= buffer[1];
                     end
@@ -168,8 +172,8 @@ module transmitter
                     end 
                 end     
                 S_SEND_BIT7: begin
-                    if (clk_in == 1'b0 && clk_in_x2_front_pulse == 1'b1) begin
-                        data_out_reg <= buffer[7];
+                    if (clk_in == 1'b0 && clk_in_x2_z == 1'b0) begin
+                        data_out_reg <= 1'b0;
                     end             
                 
                     if (clk_in_front_pulse == 1'b1) begin
@@ -178,11 +182,28 @@ module transmitter
                 end     
                 S_SEND_ACK: begin
                     data_out_reg <= 1'b0;
-                    
+
                     if (clk_in_front_pulse == 1'b1) begin
-                        state <= S_SEND_STOP;
+                        if (packet == 1'b0) begin
+                            state <= S_SEND_STOP;
+                        end
                     end 
-                end     
+
+                    if (packet == 1'b1 && clk_in_x2_front_pulse == 1'b1) begin
+                        if (clk_in_z == 1'b1) begin
+                            ready_reg <= 1'b1;
+                        end else begin
+                            state <= S_SEND_BIT0P;
+                        end
+                    end 
+                end 
+                S_SEND_BIT0P: begin
+                    data_out_reg <= buffer[0];
+
+                    if (clk_in_front_pulse == 1'b1) begin
+                        state <= S_SEND_BIT0;
+                    end 
+                end
                 S_SEND_STOP: begin
                     data_out_reg <= 1'b0;               
                 

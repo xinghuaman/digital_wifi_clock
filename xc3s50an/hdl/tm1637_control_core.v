@@ -18,18 +18,20 @@ module tm1637_control_core
     wire ready;
     reg  ready_to_send;
     reg  [7:0] buffer = 8'h00;
+    reg  packet = 1'b0;
     
-   parameter [3:0] S_RESET        = 0, 
-                   S_INIT         = 1,
-                   S_WAIT_CONF    = 2,
-                   S_CONF         = 3,
-                   S_SEND_CONF    = 4,
-                   S_WAIT_ADDRESS = 5,
-                   S_ADDRESS      = 6,
-                   S_SEND_ADDRESS = 7,
-                   S_WAIT_DATA    = 8,
-                   S_DATA         = 9,
-                   S_SEND_DATA    = 10;
+    parameter [3:0] S_RESET        = 0, 
+                    S_INIT         = 1,
+                    S_WAIT_CONF    = 2,
+                    S_CONF         = 3,
+                    S_SEND_CONF    = 4,
+                    S_WAIT_ADDRESS = 5,
+                    S_ADDRESS      = 6,
+                    S_SEND_ADDRESS = 7,
+                    S_WAIT_DATA    = 8,
+                    S_DATA         = 9,
+                    S_SEND_DATA    = 10,
+                    S_WAIT_END     = 11;
                          
     reg [3:0] state = 2'b0;
     
@@ -49,6 +51,7 @@ module tm1637_control_core
                 S_RESET: begin
                     state <= S_INIT;    
                     ready_data <= 1'b0;
+                    packet <= 1'b0;
                 end 
                 S_INIT: begin
                     if (ready_to_send == 1'b1) begin
@@ -60,10 +63,12 @@ module tm1637_control_core
                 end 
                 S_WAIT_CONF: begin
                     valid_to_send <= 1'b0;
-                    data_to_send <= 8'h00;  
+                    data_to_send <= 8'h00;
+                    ready_data <= 1'b1;  
                     
-                    if (ready_to_send == 1'b0) begin
+                    if (ready_to_send == 1'b1 && data_valid == 1'b1) begin
                         state <= S_CONF;
+                        ready_data <= 1'b0;
                     end
                 end 
                 S_CONF: begin
@@ -83,12 +88,8 @@ module tm1637_control_core
                 end
                 S_WAIT_ADDRESS: begin
                     if (ready_to_send == 1'b1) begin
-                        ready_data <= 1'b1;
-                    end
-                    
-                    if (data_valid == 1'b1) begin
-                        ready_data <= 1'b0;
                         state <= S_ADDRESS;
+                        packet <= 1'b1;
                     end
                 end
                 S_ADDRESS: begin
@@ -124,9 +125,15 @@ module tm1637_control_core
                     data_to_send <= 8'h00;
                     
                     if (ready_to_send == 1'b0) begin
-                        state <= S_WAIT_ADDRESS;
+                        state <= S_WAIT_END;
+                        packet <= 1'b0;
                     end
-                end             
+                end
+                S_WAIT_END: begin
+                    if (ready_to_send == 1'b1) begin
+                        state <= S_WAIT_CONF;
+                    end
+                end
             endcase
         end
     end
@@ -137,6 +144,7 @@ module tm1637_control_core
         .clk_in(interface_clk),
         .clk_in_x2(interface_clk_x2),
         .reset(reset),
+        .packet(packet),
         .valid(valid_to_send),
         .data(data_to_send),
         .ready(ready),
