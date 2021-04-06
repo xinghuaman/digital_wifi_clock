@@ -23,8 +23,8 @@ module control
     output [7:0] control_answer_data,
     input  control_answer_ready,
 
-    output control_i2c_wr_addr,
-    output control_i2c_rd_addr,
+    output control_i2c_en,
+    output control_i2c_rw,
     output [7:0] control_i2c_byte_read,
     output [6:0] control_i2c_addr,
     output control_i2c_in_valid,
@@ -35,7 +35,9 @@ module control
 
     output control_display_valid,
     output [7:0] control_display_data,
-    input  control_display_ready
+    input  control_display_ready,
+
+    output control_buzz_en
 );
     reg ready_reg = 1'b0;
     reg control_valid_z = 1'b0;
@@ -62,30 +64,53 @@ module control
 
     reg new_data = 1'b0;
 
-    reg control_i2c_wr_addr_reg = 1'b0;
-    reg control_i2c_rd_addr_reg = 1'b0;
+    reg control_i2c_rw_reg = 1'b0;
+    reg control_i2c_en_reg = 1'b0;
+    reg [ 7:0] control_i2c_byte_read_reg = 8'h00;
     reg [ 6:0] control_i2c_addr_reg = 7'b0000000;
     reg control_i2c_in_valid_reg = 1'b0;
     reg [ 7:0] control_i2c_in_data_reg = 8'h00;
-    reg [16:0] counter = 17'h00000;
+    reg [19:0] counter = 20'h00000;
+    reg [16:0] counter_blink = 17'h00000;
     reg [ 6:0] blink_delay = 7'h00;
     reg blink = 1'b0;
 
-    parameter [3:0] S_I2C_IDLE    = 0,
-                    S_I2C_RESET   = 1,
-                    S_I2C_WR_ADDR = 2,
-                    S_I2C_WR_SEC  = 3,
-                    S_I2C_WR_MIN  = 4,
-                    S_I2C_WR_HR   = 5,
-                    S_I2C_SEND_1  = 6,
-                    S_I2C_SEND_2  = 7,
-                    S_I2C_SEND_3  = 8,
-                    S_I2C_RD_ADDR = 9;
+    parameter [5:0] S_I2C_IDLE        = 0,
+                    S_I2C_RESET       = 1,
+                    S_I2C_SEND_AD_I   = 2,
+                    S_I2C_WAIT_I1     = 3,
+                    S_I2C_SEND_AR_I   = 4,
+                    S_I2C_WAIT_I2     = 5,
+                    S_I2C_INIT        = 6,
+                    S_I2C_WAIT        = 7,
+                    S_I2C_SEND_AD_S   = 8,
+                    S_I2C_WAIT_S1     = 9,
+                    S_I2C_SEND_AR_S   = 10,
+                    S_I2C_WAIT_S2     = 11,
+                    S_I2C_SHR         = 12,
+                    S_I2C_TIMEUPDATE  = 13,
+                    S_I2C_SEND_AD_TU  = 14,
+                    S_I2C_WAIT_TU1    = 15,
+                    S_I2C_SEND_AR_TU  = 16,
+                    S_I2C_WAIT_TU2    = 17,
+                    S_I2C_SEND_SEC    = 18,
+                    S_I2C_WAIT_TU3    = 19,
+                    S_I2C_SEND_MIN    = 20,
+                    S_I2C_WAIT_TU4    = 21,
+                    S_I2C_SEND_HR     = 22,
+                    S_I2C_TIMEREAD    = 23,
+                    S_I2C_SEND_AD_TR1 = 24,
+                    S_I2C_WAIT_TR1    = 25,
+                    S_I2C_SEND_AR_TR  = 26,
+                    S_I2C_WAIT_TR2    = 27,
+                    S_I2C_SEND_AD_TR2 = 28,
+                    S_I2C_WAIT_TR3    = 29;
 
-    reg [3:0] state_i2c = 4'd0;
+    reg [4:0] state_i2c = 5'd0;
 
-    reg [7:0] min_buffer = 8'b00111001;
-    reg [7:0] hr_buffer = 8'b00100110;
+    reg [7:0] min_buffer = 8'b00000000;
+    reg [7:0] hr_buffer = 8'b00000000;
+    reg [7:0] sec_buffer = 8'b00000000;
     reg [1:0] count_out_data = 2'b00;
     reg [7:0] dec_min = 8'h00;
     reg [7:0] unit_min = 8'h00;
@@ -116,6 +141,10 @@ module control
                     S_DISPLAY_WAIT3      = 16;
 
     reg [4:0] state_display = 5'd0;
+
+    reg [7:0] hr_comp = 8'h00;
+    reg [19:0] buzz_count = 20'h00000;
+    reg buzz_en_reg = 1'b0;
 
     always@(posedge clk) begin
         if (reset)
@@ -149,14 +178,12 @@ module control
                 end
                 S_UART_DATA_HR: begin
                     if (control_valid) begin
-                        //hr <= control_data;
-                        hr_buffer <= control_data;
+                        hr <= control_data;
                         state_time_update <= S_UART_DATA_MIN;
                     end    
                 end
                 S_UART_DATA_MIN: begin
-                    //min <= control_data;
-                    min_buffer <= control_data;
+                    min <= control_data;
                     state_time_update <= S_UART_DATA_SEC;
                 end
                 S_UART_DATA_SEC: begin
@@ -192,7 +219,7 @@ module control
             new_data <= 1'b0; 
         else if (state_time_update == S_UART_ANSWER_OK)
             new_data <= 1'b1;
-        else if (state_i2c == S_I2C_WR_ADDR) 
+        else if (state_i2c == S_I2C_TIMEUPDATE) 
             new_data <= 1'b0;
     end
 
@@ -202,77 +229,229 @@ module control
         else begin    
             case(state_i2c)
                 S_I2C_RESET: begin
-                    state_i2c <= S_I2C_IDLE;
+                    state_i2c <= S_I2C_SEND_AD_I;
+                    control_i2c_byte_read_reg <= 8'h00;
+                end
+                S_I2C_SEND_AD_I: begin
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_rw_reg <= 1'b0;
+                        control_i2c_en_reg <= 1'b1;
+                        control_i2c_addr_reg <= CONST_ADDR_DS1307;
+                        state_i2c <= S_I2C_WAIT_I1;
+                    end
+                end
+                S_I2C_WAIT_I1: begin
+                    control_i2c_en_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SEND_AR_I;
+                end
+                S_I2C_SEND_AR_I: begin
+                    control_i2c_in_valid_reg <= 1'b0;
+                    control_i2c_in_data_reg <= 8'h00;
+
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_in_valid_reg <= 1'b1;
+                        control_i2c_in_data_reg <= 8'h00;
+                        state_i2c <= S_I2C_WAIT_I2;
+                    end
+                end
+                S_I2C_WAIT_I2: begin
+                    control_i2c_en_reg <= 1'b0;
+                    control_i2c_in_valid_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_INIT;
+                end
+                S_I2C_INIT: begin
+                    control_i2c_in_valid_reg <= 1'b0;
+                    control_i2c_in_data_reg <= 8'h00;
+
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_in_valid_reg <= 1'b1;
+                        control_i2c_in_data_reg <= 8'h00;
+                        state_i2c <= S_I2C_WAIT;
+                    end
+                end
+                S_I2C_WAIT: begin
+                    control_i2c_in_valid_reg <= 1'b0;
+                    control_i2c_in_data_reg <= 8'h00;
+
+                    if (control_i2c_in_ready == 1'b1)
+                        state_i2c <= S_I2C_SEND_AD_S;
+                end
+                S_I2C_SEND_AD_S: begin
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_rw_reg <= 1'b0;
+                        control_i2c_en_reg <= 1'b1;
+                        control_i2c_addr_reg <= CONST_ADDR_DS1307;
+                        state_i2c <= S_I2C_WAIT_S1;
+                    end
+                end
+                S_I2C_WAIT_S1: begin
+                    control_i2c_en_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SEND_AR_S;
+                end
+                S_I2C_SEND_AR_S: begin
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_in_valid_reg <= 1'b1;
+                        control_i2c_in_data_reg <= 8'h02;
+                        state_i2c <= S_I2C_WAIT_S2;
+                    end
+                end
+                S_I2C_WAIT_S2: begin
+                    control_i2c_in_valid_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SHR;
+                end
+                S_I2C_SHR: begin
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_in_valid_reg <= 1'b1;
+                        control_i2c_in_data_reg <= 8'b00000000;
+                        state_i2c <= S_I2C_IDLE;
+                    end
                 end
                 S_I2C_IDLE: begin
                     control_i2c_in_valid_reg <= 1'b0;
                     control_i2c_in_data_reg <= 8'h00;
-                    control_i2c_rd_addr_reg <= 1'b0;
                     control_i2c_addr_reg <= 7'b0000000;
 
-                    if (new_data)
-                        state_i2c <= S_I2C_WR_ADDR;
+                    if (new_data == 1'b1)
+                        state_i2c <= S_I2C_TIMEUPDATE;
 
-                    if (counter == 17'h1FFFF)
-                        state_i2c <= S_I2C_RD_ADDR;
+                    if (counter == 20'hFFFFF)
+                        state_i2c <= S_I2C_TIMEREAD;
                 end
-                S_I2C_WR_ADDR: begin
-                    if (control_i2c_in_ready) begin
-                        control_i2c_wr_addr_reg <= 1'b1;
+                S_I2C_TIMEUPDATE: begin
+                    state_i2c <= S_I2C_SEND_AD_TU;
+                end
+                S_I2C_SEND_AD_TU: begin
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_rw_reg <= 1'b0;
+                        control_i2c_en_reg <= 1'b1;
                         control_i2c_addr_reg <= CONST_ADDR_DS1307;
-                        state_i2c <= S_I2C_SEND_1;
+                        state_i2c <= S_I2C_WAIT_TU1;
                     end
                 end
-                S_I2C_SEND_1: begin
+                S_I2C_WAIT_TU1: begin
+                    control_i2c_en_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SEND_AR_TU;
+                end
+                S_I2C_SEND_AR_TU: begin
                     control_i2c_in_valid_reg <= 1'b0;
                     control_i2c_in_data_reg <= 8'h00;
 
-                    if (control_i2c_in_ready == 1'b0)
-                        state_i2c <= S_I2C_WR_SEC;
-                end
-                S_I2C_RD_ADDR: begin
-                    if (control_i2c_in_ready) begin
-                        control_i2c_rd_addr_reg <= 1'b1;
-                        control_i2c_addr_reg <= CONST_ADDR_DS1307;
-                        state_i2c <= S_I2C_IDLE;
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_in_valid_reg <= 1'b1;
+                        control_i2c_in_data_reg <= 8'h00;
+                        state_i2c <= S_I2C_WAIT_TU2;
                     end
                 end
-                S_I2C_WR_SEC: begin
-                    control_i2c_wr_addr_reg <= 1'b0;
-                    control_i2c_addr_reg <= 7'b0000000;
+                S_I2C_WAIT_TU2: begin
+                    control_i2c_en_reg <= 1'b0;
+                    control_i2c_in_valid_reg <= 1'b0;
 
-                    if (control_i2c_in_ready) begin
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SEND_SEC;
+                end
+                S_I2C_SEND_SEC: begin
+                    control_i2c_in_valid_reg <= 1'b0;
+                    control_i2c_in_data_reg <= 8'h00;
+
+                    if (control_i2c_in_ready == 1'b1) begin
                         control_i2c_in_valid_reg <= 1'b1;
                         control_i2c_in_data_reg <= sec;
-                        state_i2c <= S_I2C_SEND_2;
+                        state_i2c <= S_I2C_WAIT_TU3;
                     end
                 end
-                S_I2C_SEND_2: begin
+                S_I2C_WAIT_TU3: begin
+                    control_i2c_en_reg <= 1'b0;
+                    control_i2c_in_valid_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SEND_MIN;
+                end
+                S_I2C_SEND_MIN: begin
                     control_i2c_in_valid_reg <= 1'b0;
                     control_i2c_in_data_reg <= 8'h00;
 
-                    if (control_i2c_in_ready == 1'b0)
-                        state_i2c <= S_I2C_WR_MIN;
-                end
-                S_I2C_WR_MIN: begin
-                    if (control_i2c_in_ready) begin
+                    if (control_i2c_in_ready == 1'b1) begin
                         control_i2c_in_valid_reg <= 1'b1;
                         control_i2c_in_data_reg <= min;
-                        state_i2c <= S_I2C_SEND_3;
-                    end                    
+                        state_i2c <= S_I2C_WAIT_TU4;
+                    end
                 end
-                S_I2C_SEND_3: begin
+                S_I2C_WAIT_TU4: begin
+                    control_i2c_en_reg <= 1'b0;
+                    control_i2c_in_valid_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SEND_HR;
+                end
+                S_I2C_SEND_HR: begin
                     control_i2c_in_valid_reg <= 1'b0;
                     control_i2c_in_data_reg <= 8'h00;
 
-                    if (control_i2c_in_ready == 1'b0)
-                        state_i2c <= S_I2C_WR_HR;
-                end
-                S_I2C_WR_HR: begin
-                    if (control_i2c_in_ready) begin
+                    if (control_i2c_in_ready == 1'b1) begin
                         control_i2c_in_valid_reg <= 1'b1;
                         control_i2c_in_data_reg <= hr;
                         state_i2c <= S_I2C_IDLE;
+                    end
+                end
+                S_I2C_TIMEREAD: begin
+                    state_i2c <= S_I2C_SEND_AD_TR1;
+                    control_i2c_byte_read_reg <= 8'h3;
+                end
+                S_I2C_SEND_AD_TR1: begin
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_rw_reg <= 1'b0;
+                        control_i2c_en_reg <= 1'b1;
+                        control_i2c_addr_reg <= CONST_ADDR_DS1307;
+                        state_i2c <= S_I2C_WAIT_TR1;
+                    end
+                end
+                S_I2C_WAIT_TR1: begin
+                    control_i2c_en_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b0)
+                        state_i2c <= S_I2C_SEND_AR_TR;
+                end
+                S_I2C_SEND_AR_TR: begin
+                    control_i2c_in_valid_reg <= 1'b0;
+                    control_i2c_in_data_reg <= 8'h00;
+
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_in_valid_reg <= 1'b1;
+                        control_i2c_in_data_reg <= 8'h00;
+                        state_i2c <= S_I2C_WAIT_TR2;
+                    end
+                end
+                S_I2C_WAIT_TR2: begin
+                    control_i2c_en_reg <= 1'b0;
+                    control_i2c_in_valid_reg <= 1'b0;
+
+                    if (control_i2c_in_ready == 1'b1)
+                        state_i2c <= S_I2C_SEND_AD_TR2;
+                end
+                S_I2C_SEND_AD_TR2: begin
+                    if (control_i2c_in_ready == 1'b1) begin
+                        control_i2c_rw_reg <= 1'b1;
+                        control_i2c_en_reg <= 1'b1;
+                        control_i2c_addr_reg <= CONST_ADDR_DS1307;
+                        state_i2c <= S_I2C_WAIT_TR3;
+                    end
+                end
+                S_I2C_WAIT_TR3: begin
+                    control_i2c_en_reg <= 1'b0;
+
+                    if (count_out_data == 2'b11) begin
+                        state_i2c <= S_I2C_IDLE;
+                        control_i2c_rw_reg <= 1'b0;
                     end
                 end
             endcase
@@ -287,11 +466,11 @@ module control
         end else if (reset) begin
             count_out_data <= 2'b00;
         end
-/*
+
         if (count_out_data == 2'b01) 
             min_buffer <= control_i2c_out_data;
-        else if (count_out_data == 2'b10)
-            hr_buffer <= control_i2c_out_data;*/
+        else if (count_out_data == 2'b10 && control_i2c_out_valid)
+            hr_buffer <= control_i2c_out_data;
     end
 
     always@(posedge clk) begin
@@ -306,8 +485,7 @@ module control
                     control_display_data_reg <= 8'h00;
                     control_display_valid_reg <= 1'b0;
 
-                    //if (control_i2c_out_valid && count_out_data == 2'b10) begin
-                    if (counter == 17'h1FFFF) begin
+                    if (control_i2c_out_valid && count_out_data == 2'b10) begin
                         state_display <= S_DISPLAY_SEND_ADDR1;
                         control_display_data_reg <= 8'hC0;
                         control_display_valid_reg <= 1'b1;
@@ -352,7 +530,6 @@ module control
                 S_DISPLAY_SEND_DATA2: begin
                     if (control_display_ready) begin
                         control_display_data_reg[6:0] <= digit[6:0];
-//                        control_display_data_reg[7] <= 1'b1;
                         control_display_data_reg[7] <= blink;
                         control_display_valid_reg <= 1'b1;
                         state_display <= S_DISPLAY_WAIT2;
@@ -413,9 +590,11 @@ module control
     end
 
     always@(posedge clk) begin
+        counter_blink <= counter_blink + 1'b1;
+
         if (reset) 
             blink_delay <= 7'h00;    
-        else if (counter == 17'h1FFFF) 
+        else if (counter_blink == 17'h1FFFF) 
             blink_delay <= blink_delay + 1'b1;
         else if (blink_delay == 7'h7F)
             blink_delay <= 7'h00;
@@ -428,9 +607,14 @@ module control
     always@(posedge clk) begin
         counter <= counter + 1'b1;
         unit_min[3:0] <= min_buffer[3:0];
-        dec_min[2:0] <= min_buffer[6:4];
+        unit_min[7:4] <= 4'h0;
+        dec_min[3:0] <= min_buffer[7:4];
+        dec_min[7:4] <= 4'h0;
+
         unit_hr[3:0] <= hr_buffer[3:0];
-        dec_hr[1:0] <= hr_buffer[5:4];
+        unit_hr[7:4] <= 4'h0;
+        dec_hr[3:0] <= hr_buffer[7:4];
+        dec_hr[7:4] <= 4'h0;
     end
 
     always@(posedge clk) begin
@@ -448,16 +632,29 @@ module control
         endcase
     end
 
-    assign control_i2c_byte_read = CONST_BYTE_READ;
+    always@(posedge clk) begin
+        if (hr_comp != hr_buffer) begin
+            buzz_en_reg <= 1'b1;
+            hr_comp <= hr_buffer;
+        end else if (buzz_count == 20'hFFFFF) begin
+            buzz_en_reg <= 1'b0;
+        end
+
+        if (buzz_en_reg)
+            buzz_count <= buzz_count + 1'b1;
+    end
+
     assign control_ready = ready_reg;
     assign control_answer_valid = control_answer_valid_reg;
     assign control_answer_data = control_answer_data_reg;
-    assign control_i2c_wr_addr = control_i2c_wr_addr_reg;
-    assign control_i2c_rd_addr = control_i2c_rd_addr_reg;
+    assign control_i2c_rw = control_i2c_rw_reg;
+    assign control_i2c_en = control_i2c_en_reg;
     assign control_i2c_addr = control_i2c_addr_reg;
     assign control_i2c_in_valid = control_i2c_in_valid_reg;
     assign control_i2c_in_data = control_i2c_in_data_reg;
     assign control_display_valid = control_display_valid_reg;
     assign control_display_data = control_display_data_reg;
+    assign control_i2c_byte_read = control_i2c_byte_read_reg;
+    assign control_buzz_en = buzz_en_reg;
 
 endmodule

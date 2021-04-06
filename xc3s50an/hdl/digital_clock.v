@@ -9,7 +9,8 @@ module digital_clock
     input  esp_01_uart_rx,
     output esp_01_uart_tx,
     inout  i2c_scl,
-    inout  i2c_sda
+    inout  i2c_sda,
+    output buzz
 );
     
     wire clk;
@@ -17,6 +18,7 @@ module digital_clock
     wire clk_div_x2;
     wire clk_i2c;
     wire clk_i2c_x2;
+    wire clk_pwm;
     wire reset;
 
     wire s_axis_valid_uart;
@@ -37,10 +39,10 @@ module digital_clock
     reg  control_valid = 1'b0;
     reg  [7:0] control_data = 8'h00;
 
-    wire i2c_wr_address;
-    wire i2c_rd_address;
+    wire i2c_rw;
+    wire i2c_en;
     wire [7:0] i2c_byte_read;
-    wire [6:0] i2c_data_address;
+    wire [6:0] i2c_address;
     wire i2c_in_valid;
     wire [7:0] i2c_in_data;
     wire i2c_in_ready;
@@ -53,7 +55,10 @@ module digital_clock
     
     reg  [9:0] level_pwm = 10'b0;
     reg  [15:0] counter = 16'h0000;
-    reg  check_polarity = 1'b0;    
+    reg  check_polarity = 1'b0;
+    reg  [9:0] level_buzz = 10'h1FF;
+    wire buzz_en;
+    wire out_pwm;
 
     BUFG BUFG_inst 
     (
@@ -67,7 +72,8 @@ module digital_clock
         .clk_out(clk_div),
         .clk_out_x2(clk_div_x2),
         .clk_i2c(clk_i2c),
-        .clk_i2c_x2(clk_i2c_x2)
+        .clk_i2c_x2(clk_i2c_x2),
+        .clk_pwm(clk_pwm)
     );
     
     reset_module reset_module_inst
@@ -132,10 +138,10 @@ module digital_clock
         .control_answer_valid(s_axis_valid_uart),
         .control_answer_data(s_axis_data_uart),
         .control_answer_ready(s_axis_ready_uart),
-        .control_i2c_wr_addr(i2c_wr_address),
-        .control_i2c_rd_addr(i2c_rd_address),
+        .control_i2c_rw(i2c_rw),
+        .control_i2c_en(i2c_en),
         .control_i2c_byte_read(i2c_byte_read),
-        .control_i2c_addr(i2c_data_address),
+        .control_i2c_addr(i2c_address),
         .control_i2c_in_valid(i2c_in_valid),
         .control_i2c_in_data(i2c_in_data),
         .control_i2c_in_ready(i2c_in_ready),
@@ -143,26 +149,27 @@ module digital_clock
         .control_i2c_out_data(i2c_out_data),
         .control_display_valid(tm1637_data_valid),
         .control_display_data(tm1637_data),
-        .control_display_ready(tm1637_data_ready)
+        .control_display_ready(tm1637_data_ready),
+        .control_buzz_en(buzz_en)
     );
 
     i2c_core i2c_core_inst
     (
         .clk_sys(clk),
-        .clk_i2c(clk_i2c),
-        .clk_i2c_x2(clk_i2c_x2),
         .reset(reset),
-        .wr_address(i2c_wr_address),
-        .rd_address(i2c_rd_address),
-        .byte_read(i2c_byte_read),
-        .data_address(i2c_data_address),
+        .clk_interface(clk_i2c),
+        .clk_interface_x2(clk_i2c_x2),
+        .in_en(i2c_en),
+        .in_rw(i2c_rw),
+        .in_number_byte(i2c_byte_read),
+        .in_address(i2c_address),
         .in_valid(i2c_in_valid),
         .in_data(i2c_in_data),
-        .in_ready(i2c_in_ready),
+        .out_ready(i2c_in_ready),
         .out_valid(i2c_out_valid),
         .out_data(i2c_out_data),
-        .scl(i2c_scl),
-        .sda(i2c_sda)   
+        .sda(i2c_sda),
+        .scl(i2c_scl) 
     );
 
     tm1637_control_core tm1637_control_core_inst
@@ -178,7 +185,7 @@ module digital_clock
         .data_out(tm1637_do)
     );
     
-    always@(posedge aclk) begin
+    always@(posedge clk) begin
         counter <= counter + 1'b1;
         
         if (level_pwm == 10'hFFF && counter == 16'h0000) begin
@@ -194,10 +201,20 @@ module digital_clock
     
     pwm pwm_led_inst
     (
-        .clk(aclk),
+        .clk(clk),
         .reset(reset),
         .level_pwm(level_pwm),
         .out_pwm(led)
     );
+
+    pwm pwm_buzz_inst
+    (
+        .clk(clk_pwm),
+        .reset(reset),
+        .level_pwm(level_buzz),
+        .out_pwm(out_pwm)
+    );
+
+    assign buzz = buzz_en ? out_pwm : 1'b0;
 
 endmodule

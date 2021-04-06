@@ -6,7 +6,8 @@ module divider_clock
     output clk_out,
     output clk_out_x2,
     output clk_i2c,
-    output clk_i2c_x2
+    output clk_i2c_x2,
+    output clk_pwm
 );
     
     reg [7:0] freq_counter = 8'h00;
@@ -18,6 +19,9 @@ module divider_clock
     reg i2c_freq = 1'b0;
     reg [7:0] i2c_freq_x2_counter = 8'h00;
     reg i2c_freq_x2 = 1'b0;
+ 
+    reg [5:0] pwm_freq_counter = 6'h0;
+    reg pwm_freq = 1'b0;
     
     always@(posedge clk_in) begin
         freq_counter <= freq_counter + 1'b1;
@@ -60,10 +64,21 @@ module divider_clock
             i2c_freq_x2_counter <= 9'h000;
         end 
     end
+  
+    always@(posedge clk_in) begin
+        pwm_freq_counter <= pwm_freq_counter + 1'b1;
+        
+        if (pwm_freq_counter == 6'h1F) begin
+            pwm_freq <= 1'b0;
+        end else if (pwm_freq_counter == 6'h3F) begin
+            pwm_freq <= 1'b1;
+        end 
+    end
     
     assign clk_out = freq;
     assign clk_out_x2 = freq_x2; 
     assign clk_i2c = i2c_freq;
     assign clk_i2c_x2 = i2c_freq_x2;
+    assign clk_pwm = pwm_freq;
     
 endmodule

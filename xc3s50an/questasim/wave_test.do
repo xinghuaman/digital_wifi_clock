@@ -28,6 +28,9 @@ add wave -noupdate -format Logic -radix UNSIGNED  -group {pwm_led} /digital_cloc
 add wave -noupdate -divider i2c_core
 add wave -noupdate -format Logic -radix UNSIGNED  -group {i2c_core} /digital_clock_tb/digital_clock_inst/i2c_core_inst/*
 
+--add wave -noupdate -divider pwm_buzz
+--add wave -noupdate -format Logic -radix UNSIGNED  -group {pwm_buzz} /digital_clock_tb/digital_clock_inst/pwm_buzz_inst/*
+
 TreeUpdate [SetDefaultTree]
 WaveRestoreCursors {{Cursor 1} {1611 ps} 0}
 quietly wave cursor active 1

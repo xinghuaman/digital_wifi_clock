@@ -53,13 +53,8 @@ architecture behavior of digital_clock_tb is
     signal in_valid_d     : std_logic;
     signal in_data_d      : std_logic_vector(7 downto 0);
 
-    signal i2c_sda        : std_logic:= '1';
+    signal i2c_sda        : std_logic;
     signal i2c_scl        : std_logic;
-    signal i2c_scl_z      : std_logic;
-    signal counter        : std_logic_vector(3 downto 0):= (others => '0');
-    signal buffer_en      : std_logic:= '1';
-    signal buffer_in      : std_logic:= '1';
-    signal counter_end    : std_logic_vector(7 downto 0):= (others => '0');
 
     component uart_core 
     generic
@@ -146,23 +141,6 @@ begin
         rx           => esp_01_uart_tx
     );
 
-    IOBUF_inst: IOBUF
-    generic map 
-    (
-        DRIVE            => 12,
-        IBUF_DELAY_VALUE => "0", -- Specify the amount of added input delay for buffer, "0"-"16" 
-        IFD_DELAY_VALUE  => "AUTO", -- Specify the amount of added delay for input register, "AUTO", "0"-"8" 
-        IOSTANDARD       => "DEFAULT",
-        SLEW             => "SLOW"
-    )
-    port map 
-    (
-        O  => open,         -- Buffer output
-        IO => i2c_sda,      -- Buffer inout port (connect directly to top-level port)
-        I  => buffer_in,    -- Buffer input
-        T  => buffer_en     -- 3-state enable input, high=input, low=output 
-    );
-
     clk_process: process
     begin
         aclk <= '0';
@@ -192,32 +170,13 @@ begin
         if rising_edge(aclk) then
             in_valid_d <= in_valid;
             in_data_d <= in_data;
---            i2c_scl_z <= i2c_scl;
-            
---            if (i2c_scl_z = '0' and i2c_scl = '1') then
---                counter <= counter + '1';
---            end if;
-            
---            buffer_in <= '1';
-
---            if (counter = x"A") then
---                counter_end <= counter_end + '1';
---            else
---                counter_end <= x"00";    
---            end if;   
-
---            if (counter = x"9" and i2c_scl = '0') then
---                buffer_en <= '0';
---            elsif (counter_end = x"FF") then   
---                buffer_en <= '1'; 
---                counter <= x"1";
---            elsif (counter = x"A" and i2c_scl_z = '1' and i2c_scl = '0') then
---               buffer_en <= '1';
---                counter <= x"1";
---            end if;
         end if;
     end process;
 
-
+    PULLUP_inst: PULLUP
+    port map 
+    (
+        O => i2c_sda     -- Pullup output (connect directly to top-level port)
+    );
     
 end;    
