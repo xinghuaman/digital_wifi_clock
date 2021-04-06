@@ -74,6 +74,10 @@ module control
     reg [16:0] counter_blink = 17'h00000;
     reg [ 6:0] blink_delay = 7'h00;
     reg blink = 1'b0;
+    reg init = 1'b0;
+    reg [ 7:0] copy_sec = 8'h00;
+    reg [ 7:0] copy_min = 8'h00;
+    reg [ 7:0] copy_hr = 8'h00;
 
     parameter [5:0] S_I2C_IDLE        = 0,
                     S_I2C_RESET       = 1,
@@ -140,9 +144,9 @@ module control
                     S_DISPLAY_WAIT2      = 15,
                     S_DISPLAY_WAIT3      = 16;
 
-    reg [4:0] state_display = 5'd0;
+    reg [ 4:0] state_display = 5'd0;
 
-    reg [7:0] hr_comp = 8'h00;
+    reg [ 7:0] hr_comp = 8'h00;
     reg [19:0] buzz_count = 20'h00000;
     reg buzz_en_reg = 1'b0;
 
@@ -229,8 +233,9 @@ module control
         else begin    
             case(state_i2c)
                 S_I2C_RESET: begin
-                    state_i2c <= S_I2C_SEND_AD_I;
+                    state_i2c <= S_I2C_TIMEREAD;
                     control_i2c_byte_read_reg <= 8'h00;
+                    init <= 1'b1;
                 end
                 S_I2C_SEND_AD_I: begin
                     if (control_i2c_in_ready == 1'b1) begin
@@ -269,7 +274,8 @@ module control
 
                     if (control_i2c_in_ready == 1'b1) begin
                         control_i2c_in_valid_reg <= 1'b1;
-                        control_i2c_in_data_reg <= 8'h00;
+                        control_i2c_in_data_reg[7] <= 1'b0;
+                        control_i2c_in_data_reg[6:0] <= copy_sec[6:0];
                         state_i2c <= S_I2C_WAIT;
                     end
                 end
@@ -310,7 +316,9 @@ module control
                 S_I2C_SHR: begin
                     if (control_i2c_in_ready == 1'b1) begin
                         control_i2c_in_valid_reg <= 1'b1;
-                        control_i2c_in_data_reg <= 8'b00000000;
+                        control_i2c_in_data_reg[7:6] <= 2'b00;
+                        control_i2c_in_data_reg[5:0] <= copy_hr[5:0];
+                        init <= 1'b0;
                         state_i2c <= S_I2C_IDLE;
                     end
                 end
@@ -324,6 +332,9 @@ module control
 
                     if (counter == 20'hFFFFF)
                         state_i2c <= S_I2C_TIMEREAD;
+
+                    if (init == 1'b1)
+                        state_i2c <= S_I2C_SEND_AD_I;
                 end
                 S_I2C_TIMEUPDATE: begin
                     state_i2c <= S_I2C_SEND_AD_TU;
@@ -467,10 +478,20 @@ module control
             count_out_data <= 2'b00;
         end
 
-        if (count_out_data == 2'b01) 
-            min_buffer <= control_i2c_out_data;
-        else if (count_out_data == 2'b10 && control_i2c_out_valid)
-            hr_buffer <= control_i2c_out_data;
+        if (count_out_data == 2'b01) begin 
+            if (init)
+                copy_min <= control_i2c_out_data;
+            else
+                min_buffer <= control_i2c_out_data;
+        end else if (count_out_data == 2'b10 && control_i2c_out_valid) begin
+            if (init)
+                copy_hr <= control_i2c_out_data;
+            else
+                hr_buffer <= control_i2c_out_data;
+        end else if (count_out_data == 2'b00 && control_i2c_out_valid) begin
+            if (init)
+                copy_sec <= control_i2c_out_data;
+        end
     end
 
     always@(posedge clk) begin
