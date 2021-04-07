@@ -56,7 +56,7 @@ module digital_clock
     reg  [9:0] level_pwm = 10'b0;
     reg  [15:0] counter = 16'h0000;
     reg  check_polarity = 1'b0;
-    reg  [9:0] level_buzz = 10'h1FF;
+    reg  [9:0] level_buzz = 10'h0FF;
     wire buzz_en;
     wire out_pwm;
 
