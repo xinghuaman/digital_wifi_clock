@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<HTML>
+	<HEAD>
+		<TITLE> WiFi SETTINGS fpga clock </TITLE> 
+		<META content="text/html" charset="utf-8">
+		<SCRIPT type="text/javascript" src="functions.js"></SCRIPT>
+		<SCRIPT type="text/javascript">
+			function set_ssid(submit)
+			{
+				server = "/configSSID?SSID="+val('ssid');
+				send_request(submit,server);
+				alert("Changes will take effect after a reboot. Please reboot the device.");
+			}
+			
+			function set_password(submit)
+			{
+				server = "/configPassword?Password="+encodeURIComponent(val('password'));
+				send_request(submit,server);
+				alert("Changes will take effect after a reboot. Please reboot the device.");
+			}
+			
+			function set_staticIP(submit)
+			{
+				server = "/configStaticIPdevice?StaticIPdevice_oct1="+encodeURIComponent(val('staticIPoct1'))+"&StaticIPdevice_oct2="+encodeURIComponent(val('staticIPoct2'))+"&StaticIPdevice_oct3="+encodeURIComponent(val('staticIPoct3'))+"&StaticIPdevice_oct4="+encodeURIComponent(val('staticIPoct4'));
+				send_request(submit,server);
+				alert("Changes will take effect after a reboot. Please reboot the device.");
+			}
+			
+			function set_gateway(submit)
+			{
+				server = "/configGatewaydevice?Gatewaydevice_oct1="+encodeURIComponent(val('gatewayoct1'))+"&Gatewaydevice_oct2="+encodeURIComponent(val('gatewayoct2'))+"&Gatewaydevice_oct3="+encodeURIComponent(val('gatewayoct3'))+"&Gatewaydevice_oct4="+encodeURIComponent(val('gatewayoct4'));
+				send_request(submit,server);
+				alert("Changes will take effect after a reboot. Please reboot the device.");
+			}
+		</SCRIPT>
+	</HEAD>
+	<BODY>
+	<HR>
+		<H1 align = "center"> Digital clock on ESP8266 and FPGA </H1>
+		<TABLE align="center" border="0" bordercolor="black">
+			<TR>
+				<TD>
+					<IMG src = img/esp-07.png>
+				</TD>
+		</TABLE>	
+		<HR>
+			<H3 align="center"> <FONT face="verdana" color="black"> WiFi settings </FONT> </H3>
+			<CENTER>
+				<TABLE align="center" border="0" bordercolor="black">
+					<TR>
+						<TD align="right">
+							SSID WiFi: 
+						<TD>
+							<INPUT id="ssid" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="WiFi name" size=29>
+						<TD>
+							<INPUT class="btn btn-block btn-success" value="Save" onclick="set_ssid(this);" type="submit">
+					<TR>
+						<TD align="right">
+							Password WiFi:
+						<TD>
+							<INPUT id="password" value="" pattern=".{8,15}" onfocus="this.type='text'" type="password" class="form-control" placeholder="Password" size=29>
+						<TD>
+							<INPUT class="btn btn-block btn-success" value="Save" onclick="set_password(this);" type="submit">
+					<TR>
+						<TD align="right">
+							Gateway address:	
+						<TD>						
+							<INPUT id="gatewayoct1" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="192" size=1>.
+							<INPUT id="gatewayoct2" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="168" size=1>.
+							<INPUT id="gatewayoct3" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="1" size=1>.
+							<INPUT id="gatewayoct4" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="1" size=1>
+						<TD>
+							<INPUT class="btn btn-block btn-success" value="Save" onclick="set_gateway(this);" type="submit">
+					<TR>
+						<TD align="right">
+							Static IP-address:	
+						<TD>						
+							<INPUT id="staticIPoct1" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="192" size=1>.
+							<INPUT id="staticIPoct2" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="168" size=1>.
+							<INPUT id="staticIPoct3" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="1" size=1>.
+							<INPUT id="staticIPoct4" value="" class="form-control" pattern="[0-9a-zA-Z.]{1,15}" placeholder="17" size=1>
+						<TD>
+							<INPUT class="btn btn-block btn-success" value="Save" onclick="set_staticIP(this);" type="submit">							
+				</TABLE>
+			</CENTER>
+		<H3 align="center"> <FONT face="verdana" color="white"> Reset device </FONT> </H3>
+		<CENTER>
+			<INPUT value="Reset Device!" type="button" onclick='location.href="/reset?device=yes"'>
+			<P>
+				&nbsp
+			</P>
+			<P>
+				<A href="index.htm"> <-Back </A>
+			</P>	
+		</CENTER>
+	</BODY>
+</HTML>	
