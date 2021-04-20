@@ -56,7 +56,7 @@ module tm1637_control_core
                 S_INIT: begin
                     if (ready_to_send == 1'b1) begin
                         valid_to_send <= 1'b1;
-                        data_to_send <= 8'b10001111;
+                        data_to_send <= 8'b10001100;
                         ready_data <= 1'b0;
                         state <= S_WAIT_CONF;
                     end

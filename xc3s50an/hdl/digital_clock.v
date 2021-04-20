@@ -1,5 +1,14 @@
 `timescale 1 ns / 100 ps
 
+/*
+Engineer:       sboldenko
+Design Name:    digital_clock
+Module Name:    digital_clock
+Project Name:   digital_wifi_clock
+Target Devices: spartan-3 xc3s50an-4tqg144
+Tool versions:  ise 14.7
+*/
+
 module digital_clock
 (
     input  aclk,
@@ -27,9 +36,11 @@ module digital_clock
     wire m_axis_valid_uart;
     wire [7:0] m_axis_data_uart;
 
+    reg  find_start = 1'b0;
     reg  packet = 1'b0;
     reg  [2:0] data_packet_counter = 3'b000;
 
+    wire uart_fifo_wr_en;
     wire uart_fifo_rd_en;
     wire uart_fifo_valid;
     wire uart_fifo_full;
@@ -97,8 +108,17 @@ module digital_clock
 
     always@(posedge clk) begin
         if (reset)
+            find_start <= 1'b0;
+        else if (m_axis_data_uart == 8'hED)
+            find_start <= 1'b1;
+        else if (data_packet_counter[2] == 1'b1)
+            find_start <= 1'b0;     
+    end
+
+    always@(posedge clk) begin
+        if (reset)
             data_packet_counter <= 3'b000;
-        else if (m_axis_valid_uart)
+        else if (find_start && m_axis_valid_uart)
             data_packet_counter <= data_packet_counter + 1'b1;
         else if (data_packet_counter[2] == 1'b1)
             data_packet_counter <= 3'b000;  
@@ -109,12 +129,14 @@ module digital_clock
             packet <= 1'b0;       
     end
 
+    assign uart_fifo_wr_en = find_start && m_axis_valid_uart;
+
     uart_fifo uart_fifo_inst
     (
         .clk(clk),
         .rst(reset),
         .din(m_axis_data_uart),
-        .wr_en(m_axis_valid_uart),
+        .wr_en(uart_fifo_wr_en),
         .rd_en(uart_fifo_rd_en),
         .dout(uart_fifo_dout),
         .full(uart_fifo_full),

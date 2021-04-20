@@ -18,10 +18,12 @@ entity digital_clock_tb is
 generic
 (
     COEFF_BAUDRATE   : std_logic_vector(15 downto 0):= x"0C35";
-    G_RD_FILE_NAME_1 : string:= "data_file_start.txt";
-    G_RD_FILE_NAME_2 : string:= "data_file_hr.txt";
-    G_RD_FILE_NAME_3 : string:= "data_file_min.txt";
-    G_RD_FILE_NAME_4 : string:= "data_file_sec.txt"
+    G_RD_FILE_NAME_1 : string:= "preamble.txt";
+    G_RD_FILE_NAME_2 : string:= "data_file_start.txt";
+    G_RD_FILE_NAME_3 : string:= "data_file_hr.txt";
+    G_RD_FILE_NAME_4 : string:= "data_file_min.txt";
+    G_RD_FILE_NAME_5 : string:= "data_file_sec.txt";
+    G_RD_FILE_NAME_6 : string:= "error_file.txt"
 );
 end digital_clock_tb;
  
@@ -155,13 +157,26 @@ begin
         in_data <= (others => '0');
         wait for 100 us;
         wait until falling_edge(aclk);
+
+        for i in 0 to 20 loop
+            FUNC_READ_FILE(G_RD_FILE_NAME_6, CONST_CLK_PERIOD, aclk, in_valid, in_data);
+            wait for 1.2 ms;
+        end loop;
         FUNC_READ_FILE(G_RD_FILE_NAME_1, CONST_CLK_PERIOD, aclk, in_valid, in_data);
         wait for 1.2 ms;
         FUNC_READ_FILE(G_RD_FILE_NAME_2, CONST_CLK_PERIOD, aclk, in_valid, in_data);
         wait for 1.2 ms;
         FUNC_READ_FILE(G_RD_FILE_NAME_3, CONST_CLK_PERIOD, aclk, in_valid, in_data);
         wait for 1.2 ms;
-        FUNC_READ_FILE(G_RD_FILE_NAME_4, CONST_CLK_PERIOD, aclk, in_valid, in_data);     
+        FUNC_READ_FILE(G_RD_FILE_NAME_4, CONST_CLK_PERIOD, aclk, in_valid, in_data);
+        wait for 1.2 ms;
+        FUNC_READ_FILE(G_RD_FILE_NAME_5, CONST_CLK_PERIOD, aclk, in_valid, in_data);
+        wait for 1.2 ms;
+        
+        for i in 0 to 20 loop
+            FUNC_READ_FILE(G_RD_FILE_NAME_6, CONST_CLK_PERIOD, aclk, in_valid, in_data);
+            wait for 1.2 ms;
+        end loop;
         wait;
     end process;
     
